@@ -1,12 +1,18 @@
 import { Request, Response, NextFunction } from "express";
 import { getAuth } from "firebase-admin/auth";
 import { prisma } from "../prisma";
+import { firebaseEnabled } from "../firebase/firebase";
 
 export const appendUserdId = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
+  if (!firebaseEnabled) {
+    next();
+    return;
+  }
+
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (token) {
@@ -24,7 +30,7 @@ export const appendUserdId = async (
       }
     }
   } catch (error) {
-    console.log(error);
+    console.warn("appendUserId: token verification skipped:", error);
   } finally {
     next();
   }

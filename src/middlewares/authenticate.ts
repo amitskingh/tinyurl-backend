@@ -2,6 +2,7 @@ import { getAuth } from "firebase-admin/auth";
 import { NextFunction, Request, Response } from "express";
 import APIError from "../errors/APIError";
 import { prisma } from "../prisma";
+import { firebaseEnabled } from "../firebase/firebase";
 
 const authenticate = async (
   req: Request,
@@ -9,9 +10,17 @@ const authenticate = async (
   next: NextFunction
 ) => {
   try {
+    if (!firebaseEnabled) {
+      throw new APIError(
+        503,
+        "Authentication is not configured on this server",
+        "AUTH_DISABLED"
+      );
+    }
+
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      throw new APIError(401, "Unauthorize", "INVALID_TOKEN");
+      throw new APIError(401, "Unauthorized", "INVALID_TOKEN");
     }
 
     const decodedToken = await getAuth().verifyIdToken(token);

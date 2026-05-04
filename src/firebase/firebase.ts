@@ -1,26 +1,36 @@
 import admin, { ServiceAccount } from "firebase-admin";
 import { config } from "../config";
 
-const serviceAccountBase64 = config.FIREBASE_SERVICE_ACCOUNT;
+let firebaseEnabled = false;
 
-if (!serviceAccountBase64) {
-  console.error(
-    "Error: FIREBASE_SERVICE_ACCOUNT environment variable is not set."
-  );
-  process.exit(1);
+function parseServiceAccount(): ServiceAccount | null {
+  const raw = config.FIREBASE_SERVICE_ACCOUNT;
+  if (!raw?.trim()) return null;
+  try {
+    return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as ServiceAccount;
+  } catch {
+    console.error("Invalid FIREBASE_SERVICE_ACCOUNT (expected base64 JSON)");
+    return null;
+  }
 }
 
-try {
-  const serviceAccount = JSON.parse(
-    Buffer.from(serviceAccountBase64, "base64").toString("utf-8")
+const credential = parseServiceAccount();
+
+if (credential) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert(credential),
+    });
+    firebaseEnabled = true;
+    console.log("Firebase admin initialized");
+  } catch (error) {
+    console.error("Error initializing Firebase Admin SDK:", error);
+  }
+} else {
+  console.warn(
+    "FIREBASE_SERVICE_ACCOUNT not set; optional auth (appendUserId) and /analytics are disabled for token verification."
   );
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount as ServiceAccount),
-  });
-
-  console.log("Firebase admin initialized");
-} catch (error) {
-  console.error("Error initializing Firebase Admin SDK:", error);
-  process.exit(1);
 }
+
+export { admin };
+export { firebaseEnabled };

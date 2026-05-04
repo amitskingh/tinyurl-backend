@@ -21,13 +21,19 @@ export const setupWebSocket = (server: HttpServer) => {
     }
   });
 
+  redisSubscriber.subscribe(config.clickChannel, (err) => {
+    if (err) {
+      console.error("Redis subscriber failed to subscribe:", err);
+    }
+  });
+
   redisSubscriber.on("message", (channel: string, message: string) => {
     if (channel === config.clickChannel) {
       try {
         const data = JSON.parse(message);
         // Assuming aliasId is passed elsewhere (e.g., via job metadata or Redis key)
         // For now, we'll need the aliasId to be included in the payload
-        io.to(data.aliasId).emit("clickUpdate", data);
+        io.to(String(data.aliasId)).emit("clickUpdate", data);
       } catch (error) {
         console.error("Error parsing message:", error);
       }
@@ -37,14 +43,16 @@ export const setupWebSocket = (server: HttpServer) => {
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
 
-    socket.on("join", (aliasId) => {
-      console.log(`${socket.id} joined room ${aliasId}`);
-      socket.join(aliasId);
+    socket.on("join", (aliasId: string | number) => {
+      const room = String(aliasId);
+      console.log(`${socket.id} joined room ${room}`);
+      socket.join(room);
     });
 
-    socket.on("leave", (aliasId) => {
-      console.log(`${socket.id} left room ${aliasId}`);
-      socket.leave(aliasId);
+    socket.on("leave", (aliasId: string | number) => {
+      const room = String(aliasId);
+      console.log(`${socket.id} left room ${room}`);
+      socket.leave(room);
     });
 
     socket.on("disconnect", () => {

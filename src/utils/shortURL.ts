@@ -1,3 +1,4 @@
+/** Legacy Base62 helpers for integer IDs; new links use random Base62 from `shortCodeGenerator`. */
 const BASE62_ALPHABET =
   "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 const BASE = 62;
