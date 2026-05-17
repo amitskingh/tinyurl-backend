@@ -3,6 +3,16 @@ import { Server as SocketIOServer } from "socket.io";
 import { config } from "../config";
 import { redisSubscriber } from "../services/redis";
 import { verifyAuthToken } from "../utils/jwt";
+import { aliasRepository } from "../repositories/aliasRepository";
+import { AuthTokenPayload } from "../../types/type";
+
+import "socket.io";
+
+declare module "socket.io" {
+  interface Socket {
+    user: AuthTokenPayload;
+  }
+}
 
 export const setupWebSocket = (server: HttpServer) => {
   const io = new SocketIOServer(server, {
@@ -16,7 +26,8 @@ export const setupWebSocket = (server: HttpServer) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Unauthorized"));
     try {
-      verifyAuthToken(String(token));
+      const decoded = verifyAuthToken(String(token));
+      socket.user = decoded; // Attach user info to socket
       next();
     } catch {
       next(new Error("Invalid token"));
@@ -45,10 +56,28 @@ export const setupWebSocket = (server: HttpServer) => {
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);
 
-    socket.on("join", (aliasId: string | number) => {
-      const room = String(aliasId);
-      console.log(`${socket.id} joined room ${room}`);
-      socket.join(room);
+    socket.on("join", async (aliasId: string | number) => {
+      const parsedAliasId = Number(aliasId);
+      const parsedUserId = Number(socket.user?.userId);
+
+      if (Number.isNaN(parsedAliasId)) {
+        return socket.emit("error", "Invalid alias id");
+      }
+
+      if (Number.isNaN(parsedUserId)) {
+        return socket.emit("error", "Invalid user id");
+      }
+
+      const alias = await aliasRepository().findOwnedAlias(
+        parsedAliasId,
+        parsedUserId,
+      );
+
+      if (!alias) {
+        return socket.emit("error", "Unauthorized");
+      }
+
+      socket.join(String(aliasId));
     });
 
     socket.on("leave", (aliasId: string | number) => {

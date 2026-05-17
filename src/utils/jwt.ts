@@ -1,11 +1,7 @@
-import jwt, { type JwtPayload, type Secret, type SignOptions } from "jsonwebtoken";
+import jwt, { type Secret, type SignOptions } from "jsonwebtoken";
 import APIError from "../errors/APIError";
 import { config } from "../config";
-
-export type AuthTokenPayload = JwtPayload & {
-  userId: number;
-  email: string;
-};
+import { AuthTokenPayload } from "../../types/type";
 
 export function signAuthToken(payload: AuthTokenPayload): string {
   const options: SignOptions = {

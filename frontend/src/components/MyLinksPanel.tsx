@@ -1,16 +1,14 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useRealtimeAnalytics } from "../hooks/useRealtimeAnalytics";
 import { api, apiPrefix } from "../lib/api";
-
-interface AliasRow {
-  aliasId: number;
-  alias: string | null;
-  clickCount: number;
-  URLId: number;
-  longURL: string;
-  createdAt: string;
-  expiresAt: string | null;
-}
+import {
+  isAnalyticsError,
+  type AliasRow,
+  type AnalyticsPayload,
+  type AnalyticsSuccessPayload,
+  type ClickUpdatePayload,
+} from "../types/analytics";
 
 interface ListPayload {
   status: string;
@@ -26,33 +24,142 @@ interface ErrorResponse {
   };
 }
 
-interface AnalyticsSuccessPayload {
-  aliasId: number;
-  totalClicks: number;
-  uniqueClicks: number;
-  countries: Record<string, number>;
-  referrers: Record<string, number>;
-  devices: Record<string, number>;
-  browsers: Record<string, number>;
-  os: Record<string, number>;
-}
-
-interface AnalyticsErrorPayload {
-  error: string;
-}
-
-type AnalyticsPayload = AnalyticsSuccessPayload | AnalyticsErrorPayload;
-
-function isAnalyticsError(
-  payload: AnalyticsPayload
-): payload is AnalyticsErrorPayload {
-  return "error" in payload;
-}
-
 const secondaryButtonClass =
   "rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-900 transition-colors duration-150 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60";
 const badgeClass =
   "rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600";
+
+function incrementMetric(
+  metrics: Record<string, number>,
+  key: string | null
+): Record<string, number> {
+  if (!key) return metrics;
+  return {
+    ...metrics,
+    [key]: (metrics[key] ?? 0) + 1,
+  };
+}
+
+function mergeClickUpdate(
+  analytics: AnalyticsSuccessPayload,
+  update: ClickUpdatePayload
+): AnalyticsSuccessPayload {
+  return {
+    ...analytics,
+    totalClicks: update.totalClicks,
+    devices: incrementMetric(analytics.devices, update.device),
+    browsers: incrementMetric(analytics.browsers, update.browser),
+    os: incrementMetric(analytics.os, update.os),
+  };
+}
+
+function realtimeStatusText(
+  isConnected: boolean,
+  state: string,
+  error: string | null
+) {
+  if (isConnected) return "Live updates connected";
+  if (state === "reconnecting") return "Live updates reconnecting";
+  if (state === "connecting") return "Live updates connecting";
+  if (error) return `Live updates unavailable: ${error}`;
+  return "Live updates disconnected";
+}
+
+function formatMetricLabel(value: string) {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
+interface StatCardProps {
+  label: string;
+  value: number;
+}
+
+function StatCard({ label, value }: StatCardProps) {
+  return (
+    <div className="rounded-lg border border-gray-100 bg-white p-3">
+      <p className="text-xs font-medium text-gray-400">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight text-gray-900">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+interface MetricListProps {
+  title: string;
+  metrics: Record<string, number>;
+}
+
+function MetricList({ title, metrics }: MetricListProps) {
+  const entries = Object.entries(metrics).sort(([, first], [, second]) => second - first);
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-white p-3">
+      <p className="text-xs font-medium text-gray-400">{title}</p>
+      {entries.length > 0 ? (
+        <ul className="mt-2 flex flex-col gap-2">
+          {entries.map(([name, count]) => (
+            <li key={name} className="flex items-center justify-between gap-3">
+              <span className="min-w-0 truncate text-sm text-gray-900">
+                {formatMetricLabel(name)}
+              </span>
+              <span className={badgeClass}>{count}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-gray-400">No data</p>
+      )}
+    </div>
+  );
+}
+
+interface AnalyticsDetailsProps {
+  aliasId: number;
+  analytics: AnalyticsPayload;
+  onClickUpdate: (update: ClickUpdatePayload) => void;
+}
+
+function AnalyticsDetails({
+  aliasId,
+  analytics,
+  onClickUpdate,
+}: AnalyticsDetailsProps) {
+  const { clickUpdate, status, isConnected, error } =
+    useRealtimeAnalytics(aliasId);
+
+  useEffect(() => {
+    if (clickUpdate) {
+      onClickUpdate(clickUpdate);
+    }
+  }, [clickUpdate, onClickUpdate]);
+
+  return (
+    <div className="rounded-lg border border-gray-100 bg-gray-50 p-4 text-sm text-gray-900">
+      <p className="sm:col-span-2 text-xs font-medium text-gray-400">
+        {realtimeStatusText(isConnected, status.state, error)}
+      </p>
+      {isAnalyticsError(analytics) ? (
+        <p className="mt-3">{analytics.error}</p>
+      ) : (
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <StatCard label="Alias ID" value={analytics.aliasId} />
+          <StatCard label="Total clicks" value={analytics.totalClicks} />
+          <StatCard label="Unique clicks" value={analytics.uniqueClicks} />
+          <MetricList title="Countries" metrics={analytics.countries} />
+          <MetricList title="Referrers" metrics={analytics.referrers} />
+          <MetricList title="Devices" metrics={analytics.devices} />
+          <MetricList title="Browsers" metrics={analytics.browsers} />
+          <MetricList title="Operating systems" metrics={analytics.os} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function MyLinksPanel() {
   const { user } = useAuth();
@@ -112,6 +219,30 @@ export function MyLinksPanel() {
       const response = (error as ErrorResponse).response;
       setListErr(response?.data?.message || "Could not delete link");
     }
+  }, []);
+
+  const applyRealtimeUpdate = useCallback((update: ClickUpdatePayload) => {
+    setAliases((prev) =>
+      prev
+        ? prev.map((alias) =>
+            alias.aliasId === update.aliasId
+              ? { ...alias, clickCount: update.totalClicks }
+              : alias
+          )
+        : prev
+    );
+
+    setAnalyticsById((prev) => {
+      const current = prev[update.aliasId];
+      if (!current || isAnalyticsError(current)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        [update.aliasId]: mergeClickUpdate(current, update),
+      };
+    });
   }, []);
 
   if (!user) {
@@ -232,22 +363,11 @@ export function MyLinksPanel() {
                     </div>
 
                     {analytics ? (
-                      <div className="grid gap-3 rounded-lg border border-gray-100 bg-gray-50 p-4 text-sm text-gray-900 sm:grid-cols-2">
-                        {isAnalyticsError(analytics) ? (
-                          <p className="sm:col-span-2">{analytics.error}</p>
-                        ) : (
-                          <>
-                            <p>Alias ID: {analytics.aliasId}</p>
-                            <p>Total clicks: {analytics.totalClicks}</p>
-                            <p>Unique clicks: {analytics.uniqueClicks}</p>
-                            <p>Countries: {Object.keys(analytics.countries).length}</p>
-                            <p>Referrers: {Object.keys(analytics.referrers).length}</p>
-                            <p>Devices: {Object.keys(analytics.devices).length}</p>
-                            <p>Browsers: {Object.keys(analytics.browsers).length}</p>
-                            <p>Operating systems: {Object.keys(analytics.os).length}</p>
-                          </>
-                        )}
-                      </div>
+                      <AnalyticsDetails
+                        aliasId={row.aliasId}
+                        analytics={analytics}
+                        onClickUpdate={applyRealtimeUpdate}
+                      />
                     ) : null}
                   </div>
                 </li>
