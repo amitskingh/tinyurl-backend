@@ -1,7 +1,8 @@
-import { asyncHandler } from "../middleware/asyncHandler";
+import { asyncHandler } from "../middlewares/asyncHandler";
 import { createAliasBodySchema } from "../dto/alias.dto";
 import {
   createAliasService,
+  deleteAliasForUser,
   listAliasesForUser,
   resolveRedirectService,
 } from "../services/aliasService";
@@ -17,6 +18,7 @@ export const fetchAllAlias = asyncHandler(async (req, res) => {
         clickCount: aliasRecord.clickCount,
         URLId: aliasRecord.longURLId,
         longURL: aliasRecord.longURL.originalUrl,
+        createdAt: aliasRecord.createdAt,
         expiresAt: aliasRecord.expiresAt,
       })),
     },
@@ -47,4 +49,14 @@ export const redirectAlias = asyncHandler(async (req, res) => {
   });
 
   res.redirect(301, result.url);
+});
+
+export const deleteAlias = asyncHandler(async (req, res) => {
+  const aliasId = Number(req.params.aliasId);
+  await deleteAliasForUser(aliasId, req.user.userId);
+
+  res.status(200).json({
+    status: "success",
+    message: "Alias deleted",
+  });
 });

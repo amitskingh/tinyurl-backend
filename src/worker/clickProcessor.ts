@@ -9,27 +9,30 @@ import { redisClient } from "../services/redis";
 
 type Location = { country: string | null; city: string | null };
 
-const fetchCityAndCountry = async (ip: string): Promise<Location> => {
-  let data: Location = { country: null, city: null };
-  try {
-    const AccountID = config.AccountID;
-    const LicenseKey = config.LicenseKey;
-    if (!AccountID || !LicenseKey) {
-      return { country: null, city: null };
-    }
+const geoClient =
+  config.AccountID && config.LicenseKey
+    ? new WebServiceClient(config.AccountID, config.LicenseKey, {
+        host: "geolite.info",
+      })
+    : null;
 
-    const client = new WebServiceClient(AccountID, LicenseKey, {
-      host: "geolite.info",
-    });
-    const response = await client.city(ip);
-    data = {
+const fetchCityAndCountry = async (ip: string): Promise<Location> => {
+  if (!geoClient) {
+    return { country: null, city: null };
+  }
+
+  try {
+    const response = await geoClient.city(ip);
+
+    return {
       country: response.country?.names.en || null,
       city: response.city?.names.en || null,
     };
   } catch (error) {
-    console.warn(`Failed to fetch geolocation for IP ${ip}:`, error);
+    console.warn(`Failed geolocation lookup for ${ip}`, error);
+
+    return { country: null, city: null };
   }
-  return data;
 };
 
 const clickProcessor = async (job: Job<ClickJobData>) => {
@@ -78,7 +81,7 @@ const clickProcessor = async (job: Job<ClickJobData>) => {
     // Publish to Redis
     await redisClient.publish(
       config.clickChannel,
-      JSON.stringify(analyticsPayload)
+      JSON.stringify(analyticsPayload),
     );
     console.log("Published click analytics:", analyticsPayload);
   } catch (error) {
@@ -99,7 +102,7 @@ worker.on("failed", (job, err) => {
   console.error(
     // `Job ${job.id} failed after ${job.attemptsMade} attempts:`,
     `Job processing failed`,
-    err
+    err,
   );
 });
 

@@ -98,6 +98,27 @@ export async function listAliasesForUser(userId: number | undefined) {
   return aliasRepository().listForUser(userId);
 }
 
+export async function deleteAliasForUser(aliasId: number, userId: number | undefined) {
+  if (!userId) {
+    throw new APIError(401, "Unauthorized", "UNAUTHORIZED");
+  }
+
+  if (!aliasId || Number.isNaN(aliasId)) {
+    throw new APIError(404, "Invalid alias", "INVALID_ALIAS");
+  }
+
+  const repo = aliasRepository();
+  const alias = await repo.findOwnedAlias(aliasId, userId);
+  if (!alias) {
+    throw new APIError(404, "Alias not found", "ALIAS_NOT_FOUND");
+  }
+
+  await repo.deleteAlias(aliasId);
+  if (alias.alias) {
+    await redisClient.del(`alias:${alias.alias}`);
+  }
+}
+
 export type RedirectContext = {
   ip: string;
   referrer: string;

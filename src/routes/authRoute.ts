@@ -1,8 +1,12 @@
 import { Router } from "express";
-import { syncUser } from "../controllers/authController";
+import { login, logout, me, signup } from "../controllers/authController";
+import authenticate from "../middlewares/authenticate";
 
 const router = Router();
 
-router.post("/sync", syncUser);
+router.post("/signup", signup);
+router.post("/login", login);
+router.post("/logout", authenticate, logout);
+router.get("/me", authenticate, me);
 
 export default router;

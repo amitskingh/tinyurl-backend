@@ -1,56 +1,93 @@
-import { getAuth } from "firebase-admin/auth";
+import bcrypt from "bcrypt";
 import { prisma } from "../prisma";
 import APIError from "../errors/APIError";
-import { asyncHandler } from "../middleware/asyncHandler";
-import { firebaseEnabled } from "../firebase/firebase";
+import { asyncHandler } from "../middlewares/asyncHandler";
+import { loginBodySchema, signupBodySchema } from "../dto/auth.dto";
+import { signAuthToken } from "../utils/jwt";
 
-/**
- * Verifies a Firebase ID token and ensures a matching `User` row exists (for appendUserId / analytics).
- */
-export const syncUser = asyncHandler(async (req, res) => {
-  if (!firebaseEnabled) {
-    throw new APIError(
-      503,
-      "Firebase auth is not configured on this server",
-      "AUTH_DISABLED"
-    );
-  }
+const SALT_ROUNDS = 12;
 
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) {
-    throw new APIError(401, "Missing bearer token", "INVALID_TOKEN");
-  }
-
-  const decoded = await getAuth().verifyIdToken(token);
-  const uid = decoded.uid;
-  const email =
-    decoded.email ?? `${uid}@users.noreply.firebase.local`;
-  const name =
-    (typeof decoded.name === "string" && decoded.name) ||
-    email.split("@")[0] ||
-    "User";
-
-  const user = await prisma.user.upsert({
-    where: { firebaseId: uid },
-    create: {
-      firebaseId: uid,
-      email,
-      name,
+function toAuthResponse(user: { id: number; email: string; name: string }) {
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
     },
-    update: {
-      email,
-      name,
+    token: signAuthToken({ userId: user.id, email: user.email }),
+  };
+}
+
+export const signup = asyncHandler(async (req, res) => {
+  const body = signupBodySchema.parse(req.body);
+  const existing = await prisma.user.findUnique({
+    where: { email: body.email },
+  });
+
+  if (existing) {
+    throw new APIError(409, "Email is already registered", "EMAIL_EXISTS");
+  }
+
+  const password = await bcrypt.hash(body.password, SALT_ROUNDS);
+  const user = await prisma.user.create({
+    data: {
+      email: body.email,
+      name: body.name,
+      password,
     },
   });
 
+  res.status(201).json({
+    status: "success",
+    data: toAuthResponse(user),
+  });
+});
+
+export const login = asyncHandler(async (req, res) => {
+  const body = loginBodySchema.parse(req.body);
+  const user = await prisma.user.findUnique({
+    where: { email: body.email },
+  });
+
+  if (!user) {
+    throw new APIError(401, "Invalid email or password", "INVALID_CREDENTIALS");
+  }
+
+  const passwordOk = await bcrypt.compare(body.password, user.password);
+  if (!passwordOk) {
+    throw new APIError(401, "Invalid email or password", "INVALID_CREDENTIALS");
+  }
+
   res.status(200).json({
     status: "success",
-    data: {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-      },
-    },
+    data: toAuthResponse(user),
+  });
+});
+
+export const logout = asyncHandler(async (_req, res) => {
+  res.status(200).json({
+    status: "success",
+    message: "Logged out",
+  });
+});
+
+export const me = asyncHandler(async (req, res) => {
+  const userId = req.user.userId;
+  if (!userId) {
+    throw new APIError(401, "Unauthorized", "UNAUTHORIZED");
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (!user) {
+    throw new APIError(401, "Unauthorized", "USER_NOT_FOUND");
+  }
+
+  res.status(200).json({
+    status: "success",
+    data: { user },
   });
 });

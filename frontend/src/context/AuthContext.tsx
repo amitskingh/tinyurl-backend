@@ -7,160 +7,153 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import {
-  GoogleAuthProvider,
-  createUserWithEmailAndPassword,
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  signInWithPopup,
-  signOut,
-  type User,
-} from "firebase/auth";
-import { getFirebaseAuth, isFirebaseConfigured } from "../lib/firebase";
-import { apiFetch } from "../lib/api";
+import { api, clearAuthToken, getAuthToken, setAuthToken } from "../lib/api";
 
-export type BackendUser = {
+export interface AuthUser {
   id: number;
-  email: string;
   name: string;
-};
+  email: string;
+}
 
-type AuthContextValue = {
-  firebaseConfigured: boolean;
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+interface AuthContextValue {
   loading: boolean;
-  firebaseUser: User | null;
-  backendUser: BackendUser | null;
-  syncError: string | null;
-  getIdToken: () => Promise<string | null>;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
+  user: AuthUser | null;
+  token: string | null;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (name: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-};
+}
+
+interface AuthPayload {
+  status: "success";
+  data: {
+    user: AuthUser;
+    token: string;
+  };
+}
+
+interface MePayload {
+  status: "success";
+  data: {
+    user: AuthUser;
+  };
+}
+
+interface ApiErrorLike {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function syncWithBackend(idToken: string): Promise<BackendUser> {
-  const res = await apiFetch("/api/v1/auth/sync", {
-    method: "POST",
-    token: idToken,
-  });
-  const json = (await res.json()) as {
-    status?: string;
-    message?: string;
-    data?: { user: BackendUser };
-  };
-  if (!res.ok || json.status !== "success" || !json.data?.user) {
-    throw new Error(json.message || "Could not sync account with server");
-  }
-  return json.data.user;
+function getErrorMessage(error: unknown, fallback: string): string {
+  const response = (error as ApiErrorLike).response;
+  return response?.data?.message || (error instanceof Error ? error.message : fallback);
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
-  const firebaseConfigured = isFirebaseConfigured();
-  const [loading, setLoading] = useState(firebaseConfigured);
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
-  const [backendUser, setBackendUser] = useState<BackendUser | null>(null);
-  const [syncError, setSyncError] = useState<string | null>(null);
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [token, setToken] = useState<string | null>(() => getAuthToken());
 
   useEffect(() => {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      setLoading(false);
-      return;
-    }
+    let active = true;
 
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      setFirebaseUser(user);
-      setSyncError(null);
-
-      if (!user) {
-        setBackendUser(null);
+    async function loadCurrentUser() {
+      const storedToken = getAuthToken();
+      if (!storedToken) {
         setLoading(false);
         return;
       }
 
       try {
-        const token = await user.getIdToken();
-        const bu = await syncWithBackend(token);
-        setBackendUser(bu);
-      } catch (e) {
-        setBackendUser(null);
-        setSyncError(e instanceof Error ? e.message : "Sync failed");
+        const { data } = await api.get<MePayload>("/api/auth/me");
+        if (!active) return;
+        setUser(data.data.user);
+        setToken(storedToken);
+      } catch {
+        clearAuthToken();
+        if (!active) return;
+        setUser(null);
+        setToken(null);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
-    });
-
-    return () => unsub();
-  }, []);
-
-  const getIdToken = useCallback(async () => {
-    const auth = getFirebaseAuth();
-    const u = auth?.currentUser;
-    if (!u) return null;
-    return u.getIdToken();
-  }, []);
-
-  const signInWithEmail = useCallback(async (email: string, password: string) => {
-    const auth = getFirebaseAuth();
-    if (!auth) throw new Error("Firebase Auth not configured");
-    await signInWithEmailAndPassword(auth, email.trim(), password);
-  }, []);
-
-  const signUpWithEmail = useCallback(async (email: string, password: string) => {
-    const auth = getFirebaseAuth();
-    if (!auth) throw new Error("Firebase Auth not configured");
-    if (password.length < 6) {
-      throw new Error("Password must be at least 6 characters");
     }
-    await createUserWithEmailAndPassword(auth, email.trim(), password);
+
+    void loadCurrentUser();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const signInWithGoogle = useCallback(async () => {
-    const auth = getFirebaseAuth();
-    if (!auth) throw new Error("Firebase Auth not configured");
-    const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+  const login = useCallback(async (email: string, password: string) => {
+    try {
+      const { data } = await api.post<AuthPayload>("/api/auth/login", {
+        email,
+        password,
+      });
+      setAuthToken(data.data.token);
+      setToken(data.data.token);
+      setUser(data.data.user);
+    } catch (error) {
+      throw new Error(getErrorMessage(error, "Login failed"));
+    }
   }, []);
+
+  const signup = useCallback(
+    async (name: string, email: string, password: string) => {
+      try {
+        const { data } = await api.post<AuthPayload>("/api/auth/signup", {
+          name,
+          email,
+          password,
+        });
+        setAuthToken(data.data.token);
+        setToken(data.data.token);
+        setUser(data.data.user);
+      } catch (error) {
+        throw new Error(getErrorMessage(error, "Signup failed"));
+      }
+    },
+    []
+  );
 
   const logout = useCallback(async () => {
-    const auth = getFirebaseAuth();
-    if (auth) await signOut(auth);
-    setBackendUser(null);
-    setSyncError(null);
+    try {
+      await api.post("/api/auth/logout");
+    } catch {
+      // Local auth state should still be cleared if the token is expired.
+    } finally {
+      clearAuthToken();
+      setToken(null);
+      setUser(null);
+    }
   }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
-      firebaseConfigured,
       loading,
-      firebaseUser,
-      backendUser,
-      syncError,
-      getIdToken,
-      signInWithEmail,
-      signUpWithEmail,
-      signInWithGoogle,
+      user,
+      token,
+      login,
+      signup,
       logout,
     }),
-    [
-      firebaseConfigured,
-      loading,
-      firebaseUser,
-      backendUser,
-      syncError,
-      getIdToken,
-      signInWithEmail,
-      signUpWithEmail,
-      signInWithGoogle,
-      logout,
-    ]
+    [loading, login, logout, signup, token, user]
   );
 
-  return (
-    <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextValue {

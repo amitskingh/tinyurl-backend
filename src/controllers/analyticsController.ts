@@ -1,6 +1,6 @@
 import { Response } from "express";
 import APIError from "../errors/APIError";
-import { asyncHandler } from "../middleware/asyncHandler";
+import { asyncHandler } from "../middlewares/asyncHandler";
 import { getAnalyticsForUserAlias } from "../services/analyticsService";
 
 export const getAnalytics = asyncHandler(async (req, res: Response) => {

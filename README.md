@@ -6,7 +6,7 @@ A URL shortener with advanced analytics, including click tracking, country-based
 
 - 🔗 **URL Shortening** using Base62 encoding
 - 📊 **Advanced Analytics**: Click count, country tracking, device insights, and referral sources
-- 🔒 **Secure Authentication** with Firebase Admin SDK
+- 🔒 **Secure Authentication** with JWT and bcrypt password hashing
 - ⚡ **Performance Optimization** with Redis caching
 - 📂 **Scalable Database Design** with PostgreSQL/MongoDB & optimized indexing
 - 🛠 **Background Processing** with BullMQ for analytics updates
@@ -18,7 +18,7 @@ A URL shortener with advanced analytics, including click tracking, country-based
 - **Backend:** Node.js, Express.js, TypeScript
 - **Database:** PostgreSQL(Prisma ORM)
 - **Caching & Queues:** Redis, BullMQ
-- **Authentication:** Firebase Admin SDK
+- **Authentication:** JWT Bearer tokens
 - **Real-time Communication:** WebSockets
 - **Containerization:** Docker
 
@@ -40,16 +40,26 @@ A URL shortener with advanced analytics, including click tracking, country-based
    ```env
    DATABASE_URL=your_database_url
    REDIS_URL=your_redis_url
-
-   # Base64-encoded Firebase service account JSON (same project as the web app)
-   FIREBASE_SERVICE_ACCOUNT=your_base64_service_account_json
+   JWT_SECRET=replace_with_a_long_random_secret
+   JWT_EXPIRES_IN=7d
+   PORT=8080
 
    # `AccountID` & `LicenseKey` is from your MaxMind account.
    AccountID=account_id
    LicenseKey=license_key
    ```
 
-4. Start the development server:
+4. ```bash
+      DATABASE_URL=postgresql://postgres:postgres@postgres:5432/mydb
+                                 ↑
+                           docker service/container name
+
+      REDIS_URL=redis://redis:6379
+                        ↑
+                  docker service/container name
+   ```
+
+5. Start the development server:
    ```sh
    npm run dev
    npm run worker
@@ -59,8 +69,13 @@ A URL shortener with advanced analytics, including click tracking, country-based
 
 | Method | Endpoint | Description |
 |--------|---------|-------------|
-| `POST` | `/api/v1/` | Fetch all shorten URL |
+| `POST` | `/api/auth/signup` | Create an account |
+| `POST` | `/api/auth/login` | Log in and receive a JWT |
+| `POST` | `/api/auth/logout` | Log out |
+| `GET` | `/api/auth/me` | Get the current user |
+| `GET` | `/api/v1/` | Fetch authenticated user's shortened URLs |
 | `POST` | `/api/v1/short` | Shorten a URL |
+| `DELETE` | `/api/v1/:aliasId` | Delete an authenticated user's short URL |
 | `GET` | `/api/v1/:shortURL` | Redirect to Original URL |
 | `GET` | `/api/v1/analytics/:aliasId` | Get URL Analytics |
 

@@ -1,32 +1,23 @@
 import { Request, Response, NextFunction } from "express";
-import { getAuth } from "firebase-admin/auth";
 import { prisma } from "../prisma";
-import { firebaseEnabled } from "../firebase/firebase";
+import { verifyAuthToken } from "../utils/jwt";
 
 export const appendUserdId = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  if (!firebaseEnabled) {
-    next();
-    return;
-  }
-
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (token) {
-      const decodedToken = await getAuth().verifyIdToken(token);
-      if (decodedToken) {
-        const user = await prisma.user.findFirst({
-          where: {
-            firebaseId: decodedToken.uid,
-          },
-        });
+    const [scheme, token] = req.headers.authorization?.split(" ") ?? [];
+    if (scheme === "Bearer" && token) {
+      const decodedToken = verifyAuthToken(token);
+      const user = await prisma.user.findUnique({
+        where: { id: decodedToken.userId },
+        select: { id: true },
+      });
 
-        if (user) {
-          req.user.userId = user.id;
-        }
+      if (user) {
+        req.user.userId = user.id;
       }
     }
   } catch (error) {

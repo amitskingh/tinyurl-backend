@@ -43,6 +43,7 @@ export function aliasRepository(db: Prisma.TransactionClient | typeof prisma = p
       return db.alias.findMany({
         where: { userId },
         include: { longURL: true },
+        orderBy: { createdAt: "desc" },
       });
     },
 
@@ -51,6 +52,17 @@ export function aliasRepository(db: Prisma.TransactionClient | typeof prisma = p
         where: { id: aliasId },
         data: { clickCount: { increment: 1 } },
       });
+    },
+
+    findOwnedAlias(aliasId: number, userId: number) {
+      return db.alias.findFirst({
+        where: { id: aliasId, userId },
+        select: { id: true, alias: true },
+      });
+    },
+
+    deleteAlias(aliasId: number) {
+      return db.alias.delete({ where: { id: aliasId } });
     },
   };
 }

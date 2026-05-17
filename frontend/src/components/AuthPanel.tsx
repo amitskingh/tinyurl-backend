@@ -1,167 +1,91 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-export function AuthPanel() {
-  const {
-    firebaseConfigured,
-    loading,
-    firebaseUser,
-    backendUser,
-    syncError,
-    signInWithEmail,
-    signUpWithEmail,
-    signInWithGoogle,
-    logout,
-  } = useAuth();
+interface AuthPanelProps {
+  mode: "login" | "signup";
+}
 
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+interface RedirectState {
+  from?: {
+    pathname?: string;
+  };
+}
+
+const inputClass =
+  "w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 transition-colors duration-150 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-gray-50";
+const labelClass = "text-sm font-normal leading-relaxed text-gray-400";
+const primaryButtonClass =
+  "rounded-lg bg-blue-500 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60";
+
+export function AuthPanel({ mode }: AuthPanelProps) {
+  const { login, signup } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [localErr, setLocalErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  if (!firebaseConfigured) {
-    return (
-      <div className="rounded-xl border border-amber-900 bg-amber-950/40 px-4 py-3 text-sm text-amber-200">
-        Firebase Auth is not configured. Add{" "}
-        <code className="rounded bg-black/30 px-1 font-mono text-xs">
-          VITE_FIREBASE_API_KEY
-        </code>
-        ,{" "}
-        <code className="rounded bg-black/30 px-1 font-mono text-xs">
-          VITE_FIREBASE_AUTH_DOMAIN
-        </code>
-        ,{" "}
-        <code className="rounded bg-black/30 px-1 font-mono text-xs">
-          VITE_FIREBASE_PROJECT_ID
-        </code>
-        , and{" "}
-        <code className="rounded bg-black/30 px-1 font-mono text-xs">
-          VITE_FIREBASE_APP_ID
-        </code>{" "}
-        to <code className="font-mono text-xs">frontend/.env</code> (Firebase
-        console → Project settings → Your apps).
-      </div>
-    );
-  }
+  const isSignup = mode === "signup";
 
-  if (loading) {
-    return (
-      <p className="text-center text-sm text-slate-400">Checking session…</p>
-    );
-  }
+  const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError(null);
+    setSubmitting(true);
 
-  if (firebaseUser && backendUser) {
-    return (
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4 text-left">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-xs text-slate-500">Signed in</p>
-            <p className="font-medium text-white">{backendUser.email}</p>
-            <p className="text-xs text-slate-500">User ID {backendUser.id}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void logout()}
-            className="rounded-lg border border-slate-600 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800"
-          >
-            Sign out
-          </button>
-        </div>
-        {syncError ? (
-          <p className="text-sm text-amber-200">{syncError}</p>
-        ) : null}
-      </div>
-    );
-  }
-
-  if (firebaseUser && syncError) {
-    return (
-      <div className="space-y-2 rounded-2xl border border-red-900/80 bg-red-950/30 p-4 text-left">
-        <p className="text-sm font-medium text-red-200">
-          Firebase OK, but server sync failed
-        </p>
-        <p className="text-xs text-red-300/90">{syncError}</p>
-        <button
-          type="button"
-          onClick={() => void logout()}
-          className="text-sm text-violet-400 underline hover:text-violet-300"
-        >
-          Sign out
-        </button>
-      </div>
-    );
-  }
-
-  if (firebaseUser && !backendUser && !syncError) {
-    return (
-      <p className="text-center text-sm text-slate-400">
-        Linking your account with the API…
-      </p>
-    );
-  }
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLocalErr(null);
-    setBusy(true);
     try {
-      if (mode === "signin") {
-        await signInWithEmail(email, password);
+      if (isSignup) {
+        await signup(name, email, password);
       } else {
-        await signUpWithEmail(email, password);
+        await login(email, password);
       }
-      setPassword("");
-    } catch (err) {
-      setLocalErr(err instanceof Error ? err.message : "Authentication failed");
-    } finally {
-      setBusy(false);
-    }
-  };
 
-  const onGoogle = async () => {
-    setLocalErr(null);
-    setBusy(true);
-    try {
-      await signInWithGoogle();
+      setPassword("");
+      const from = (location.state as RedirectState | null)?.from?.pathname;
+      navigate(from || "/dashboard", { replace: true });
     } catch (err) {
-      setLocalErr(err instanceof Error ? err.message : "Google sign-in failed");
+      setError(err instanceof Error ? err.message : "Authentication failed");
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-left space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-medium text-white">Account</h2>
-        <div className="flex rounded-lg border border-slate-700 p-0.5 text-xs">
-          <button
-            type="button"
-            className={`rounded-md px-2 py-1 ${mode === "signin" ? "bg-slate-700 text-white" : "text-slate-400"}`}
-            onClick={() => {
-              setMode("signin");
-              setLocalErr(null);
-            }}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className={`rounded-md px-2 py-1 ${mode === "signup" ? "bg-slate-700 text-white" : "text-slate-400"}`}
-            onClick={() => {
-              setMode("signup");
-              setLocalErr(null);
-            }}
-          >
-            Sign up
-          </button>
-        </div>
+    <section className="mx-auto flex w-full max-w-md flex-col gap-6 rounded-xl border border-gray-100 bg-white p-8 shadow-sm">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-semibold tracking-tight text-gray-900">
+          {isSignup ? "Sign up" : "Log in"}
+        </h1>
+        <p className="text-sm font-normal leading-relaxed text-gray-400">
+          {isSignup
+            ? "Create your TinyURL account."
+            : "Welcome back to TinyURL."}
+        </p>
       </div>
 
-      <form className="space-y-3" onSubmit={(e) => void onSubmit(e)}>
-        <div className="space-y-1">
-          <label htmlFor="auth-email" className="text-xs text-slate-400">
+      <form className="flex flex-col gap-4" onSubmit={onSubmit}>
+        {isSignup ? (
+          <div className="flex flex-col gap-2">
+            <label htmlFor="auth-name" className={labelClass}>
+              Name
+            </label>
+            <input
+              id="auth-name"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className={inputClass}
+              disabled={submitting}
+              required
+            />
+          </div>
+        ) : null}
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="auth-email" className={labelClass}>
             Email
           </label>
           <input
@@ -169,61 +93,43 @@ export function AuthPanel() {
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-            disabled={busy}
+            onChange={(event) => setEmail(event.target.value)}
+            className={inputClass}
+            disabled={submitting}
             required
           />
         </div>
-        <div className="space-y-1">
-          <label htmlFor="auth-pass" className="text-xs text-slate-400">
+
+        <div className="flex flex-col gap-2">
+          <label htmlFor="auth-password" className={labelClass}>
             Password
           </label>
           <input
-            id="auth-pass"
+            id="auth-password"
             type="password"
-            autoComplete={
-              mode === "signin" ? "current-password" : "new-password"
-            }
+            autoComplete={isSignup ? "new-password" : "current-password"}
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
-            disabled={busy}
+            onChange={(event) => setPassword(event.target.value)}
+            className={inputClass}
+            disabled={submitting}
             required
-            minLength={mode === "signup" ? 6 : undefined}
+            minLength={isSignup ? 8 : undefined}
           />
         </div>
-        {localErr && (
-          <p className="text-sm text-red-300" role="alert">
-            {localErr}
+
+        {error ? (
+          <p
+            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm font-normal leading-relaxed text-gray-900"
+            role="alert"
+          >
+            {error}
           </p>
-        )}
-        <button
-          type="submit"
-          disabled={busy}
-          className="w-full rounded-lg bg-violet-600 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
-        >
-          {busy ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
+        ) : null}
+
+        <button type="submit" disabled={submitting} className={primaryButtonClass}>
+          {submitting ? "Please wait..." : isSignup ? "Sign up" : "Log in"}
         </button>
       </form>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-700" />
-        </div>
-        <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-slate-900/80 px-2 text-slate-500">Or</span>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => void onGoogle()}
-        className="w-full rounded-lg border border-slate-600 py-2 text-sm text-slate-200 hover:bg-slate-800 disabled:opacity-50"
-      >
-        Continue with Google
-      </button>
-    </div>
+    </section>
   );
 }

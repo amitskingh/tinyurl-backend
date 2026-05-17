@@ -2,6 +2,7 @@ import { Server as HttpServer } from "http";
 import { Server as SocketIOServer } from "socket.io";
 import { config } from "../config";
 import { redisSubscriber } from "../services/redis";
+import { verifyAuthToken } from "../utils/jwt";
 
 export const setupWebSocket = (server: HttpServer) => {
   const io = new SocketIOServer(server, {
@@ -15,6 +16,7 @@ export const setupWebSocket = (server: HttpServer) => {
     const token = socket.handshake.auth?.token;
     if (!token) return next(new Error("Unauthorized"));
     try {
+      verifyAuthToken(String(token));
       next();
     } catch {
       next(new Error("Invalid token"));

@@ -1,20 +1,32 @@
+import axios from "axios";
+
+const TOKEN_KEY = "tinyurl.jwt";
+
 export const apiPrefix = import.meta.env.VITE_API_PREFIX ?? "";
 
-export async function apiFetch(
-  path: string,
-  init: RequestInit & { token?: string | null } = {}
-): Promise<Response> {
-  const { token, ...rest } = init;
-  const headers = new Headers(rest.headers);
-  if (token) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
-  if (
-    rest.body &&
-    typeof rest.body === "string" &&
-    !headers.has("Content-Type")
-  ) {
-    headers.set("Content-Type", "application/json");
-  }
-  return fetch(`${apiPrefix}${path}`, { ...rest, headers });
+export const api = axios.create({
+  baseURL: apiPrefix,
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
+
+export function getAuthToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
 }
+
+export function setAuthToken(token: string) {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});

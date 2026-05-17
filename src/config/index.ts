@@ -19,7 +19,8 @@ export const config = {
   AccountID: process.env.AccountID,
   LicenseKey: process.env.LicenseKey,
 
-  FIREBASE_SERVICE_ACCOUNT: process.env.FIREBASE_SERVICE_ACCOUNT,
+  JWT_SECRET: process.env.JWT_SECRET || "dev-only-change-me",
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "7d",
 
   /** Random short code length (Base62). 7–8 chars is a common tradeoff. */
   SHORT_CODE_LENGTH: Math.min(
