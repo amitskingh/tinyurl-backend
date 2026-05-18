@@ -1,28 +1,39 @@
-FROM node:23-alpine
+# Use Node.js LTS version
+FROM node:22-alpine
 
-# working directory
+# Set working directory inside container
 WORKDIR /app
 
-# Copy package.json and package-lock.json
+# Copy dependency files first
+# Helps Docker cache dependencies efficiently
 COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN npm install
+# npm ci is preferred for Docker/CI environments
+RUN npm ci
 
-# Copy package.json and package-lock.json
+# Copy all project files
 COPY . .
 
-# Generate prisma client
+# Generate Prisma client
 RUN npx prisma generate
 
-# Build TypeScript
+# Build TypeScript project
 RUN npm run build
 
-# Expose port
+# Expose application port
 EXPOSE 8080
 
-# Start in developement
+# =========================
+# Development Command
+# Use this while local development with hot reload
+# Requires dev dependencies
+# =========================
 # CMD ["npm", "run", "dev"]
 
-# Start in production
+# =========================
+# Production Command
+# Runs Prisma migrations first
+# Then starts compiled application
+# =========================
 CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
