@@ -58,8 +58,8 @@ jobs:
             git checkout prod
             sudo git reset --hard origin/prod
 
-            docker compose -f docker-compose.prod.yml pull
+            docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
-            docker compose -f docker-compose.prod.yml down
+            docker compose --env-file .env.prod -f docker-compose.prod.yml pull
 
-            docker compose -f docker-compose.prod.yml up -d
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
