@@ -41,7 +41,7 @@ app.use("/api/v1", apiRateLimiter, appendUserdId, aliasRouter);
 app.use("/api/v1/analytics", authenticate, analyticsRouter);
 
 // Public redirect route WITHOUT strict API limiter
-app.use("/", shortCodeRouter);
+app.use("/s", shortCodeRouter);
 
 app.use(errorHandler);
 
