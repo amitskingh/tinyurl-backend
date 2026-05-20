@@ -2,19 +2,19 @@ services:
   app:
     build: .
     container_name: tinyurl-app
-    command: ["sh", "-c", "npx prisma migrate deploy && npm run start"]
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run dev"]
+    volumes:
+      - .:/app
+      - /app/node_modules
     ports:
-      - "8080:8080"
+      - "${PORT}:${PORT}"
     depends_on:
       redis:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mydb
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: supersecret
-      PORT: 8080
+    env_file:
+      - .env.local
     restart: always
 
   worker:
@@ -26,10 +26,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mydb
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: supersecret
+    env_file:
+      - .env.local
     restart: always
 
   redis:
@@ -47,12 +45,10 @@ services:
     image: "postgres:17-alpine"
     container_name: tinyurl-postgres
     restart: always
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: mydb
+    env_file:
+      - .env.local
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d mydb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 10
