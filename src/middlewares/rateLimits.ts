@@ -1,23 +1,66 @@
-import rateLimit from "express-rate-limit";
+import { Request, Response, NextFunction } from "express";
 import { config } from "../config";
+import { redisClient } from "../services/redis";
 
-/** General API traffic (per IP) */
-export const apiRateLimiter = rateLimit({
-  windowMs: config.RATE_LIMIT_WINDOW_MS,
-  max: config.RATE_LIMIT_MAX,
-  standardHeaders: true,
-  legacyHeaders: false,
-});
+const createRateLimiter = (
+  namespace: string,
+  windowSeconds: number,
+  maxRequests: number,
+) => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
+    try {
+      const ip = req.ip;
 
-/** Stricter limit for short-link creation (abuse prevention) */
-export const shortCreationRateLimiter = rateLimit({
-  windowMs: config.RATE_LIMIT_WINDOW_MS,
-  max: config.RATE_LIMIT_SHORT_MAX,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    status: "error",
-    message: "Too many shorten requests; try again later",
-    errorCode: "RATE_LIMITED",
-  },
-});
+      console.log(
+        `Request coming from IP: ${ip} to ${req.originalUrl} from path ${req.path}`,
+      );
+
+      if (!ip) {
+        res.status(400).json({
+          success: false,
+          message: "Unable to identify client IP",
+        });
+
+        return;
+      }
+
+      const path = req.originalUrl.split("?")[0];
+      const key = `ratelimit:${namespace}:${path}:${ip}`;
+
+      const requests = await redisClient.incr(key);
+
+      if (requests === 1) {
+        await redisClient.expire(key, windowSeconds);
+      }
+
+      if (requests > maxRequests) {
+        res.status(429).json({
+          success: false,
+          message: "Too many requests. Please try again later.",
+        });
+
+        return;
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+};
+
+export const apiRateLimiter = createRateLimiter(
+  "api",
+  config.RATE_LIMIT_WINDOW_SEC,
+  config.RATE_LIMIT_MAX,
+);
+
+export const shortCreationRateLimiter = createRateLimiter(
+  "short-create",
+  config.RATE_LIMIT_WINDOW_SEC,
+  config.RATE_LIMIT_SHORT_MAX,
+);

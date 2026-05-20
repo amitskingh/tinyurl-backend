@@ -25,7 +25,7 @@ export const config = {
   /** Random short code length (Base62). 7–8 chars is a common tradeoff. */
   SHORT_CODE_LENGTH: Math.min(
     12,
-    Math.max(6, int(process.env.SHORT_CODE_LENGTH, 8))
+    Math.max(6, int(process.env.SHORT_CODE_LENGTH, 8)),
   ),
   /** Max attempts to draw a non-colliding short code */
   SHORT_CODE_MAX_ATTEMPTS: int(process.env.SHORT_CODE_MAX_ATTEMPTS, 8),
@@ -35,7 +35,7 @@ export const config = {
 
   CORS_ORIGIN: process.env.CORS_ORIGIN || "*",
 
-  RATE_LIMIT_WINDOW_MS: int(process.env.RATE_LIMIT_WINDOW_MS, 60_000),
-  RATE_LIMIT_MAX: int(process.env.RATE_LIMIT_MAX, 300),
-  RATE_LIMIT_SHORT_MAX: int(process.env.RATE_LIMIT_SHORT_MAX, 30),
+  RATE_LIMIT_WINDOW_SEC: int(process.env.RATE_LIMIT_WINDOW_MS, 60),
+  RATE_LIMIT_MAX: int(process.env.RATE_LIMIT_MAX, 100),
+  RATE_LIMIT_SHORT_MAX: int(process.env.RATE_LIMIT_SHORT_MAX, 3),
 } as const;
