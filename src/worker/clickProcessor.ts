@@ -141,7 +141,7 @@ function mapDeviceType(device: string | undefined): DeviceType | null {
     TABLET: "TABLET",
     DESKTOP: "DESKTOP",
   };
-  return deviceMap[device] || null;
+  return deviceMap[device] || deviceMap["DESKTOP"];
 }
 
 redisClient.on("error", (err) => {
