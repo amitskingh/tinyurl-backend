@@ -3,7 +3,6 @@ import {
   createAlias,
   deleteAlias,
   fetchAllAlias,
-  redirectAlias,
 } from "../controllers/aliasController";
 import { shortCreationRateLimiter } from "../middlewares/rateLimits";
 
@@ -14,7 +13,5 @@ router.get("/", fetchAllAlias);
 router.post("/short", shortCreationRateLimiter, createAlias);
 
 router.delete("/:aliasId", deleteAlias);
-
-router.get("/:shortURL", redirectAlias);
 
 export = router;

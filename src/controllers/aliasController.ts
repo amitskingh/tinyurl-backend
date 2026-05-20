@@ -44,11 +44,11 @@ export const redirectAlias = asyncHandler(async (req, res) => {
   const { shortURL } = req.params;
   const result = await resolveRedirectService(shortURL, {
     ip: req.ip || "unknown",
-    referrer: req.get("Referrer") || "Direct",
+    referrer: req.get("Referer") || "Direct",
     userAgent: req.get("User-Agent") || "unknown",
   });
 
-  res.redirect(301, result.url);
+  res.redirect(302, result.url);
 });
 
 export const deleteAlias = asyncHandler(async (req, res) => {
