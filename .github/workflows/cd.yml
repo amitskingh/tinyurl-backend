@@ -1,50 +1,31 @@
 name: Deploy Backend to EC2
-
 on:
   push:
     branches:
       - prod
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       # Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Node.js
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      # Install dependencies
-      - name: Install dependencies
-        run: npm install
-
-      # Run tests
-      # - name: Run tests
-      #   run: npm test
-
-      # Build application
-      - name: Build project
-        run: npm run build
-
-      # Docker login
+      # Login to Docker Hub
       - name: Docker Login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
       # Build Docker image
+      # --no-cache ensures fresh build every time, no stale layers
+      # npm ci, prisma generate, and tsc are all run inside Docker via Dockerfile
       - name: Build Image
-        run: docker build -t ${{ secrets.DOCKER_USERNAME }}/tinyurl-backend:latest .
+        run: docker build --no-cache -t ${{ secrets.DOCKER_USERNAME }}/tinyurl-backend:latest .
 
-      # Push Docker image
+      # Push image to Docker Hub
       - name: Push Image
         run: docker push ${{ secrets.DOCKER_USERNAME }}/tinyurl-backend:latest
 
-      # Deploy to EC2
+      # SSH into EC2 and redeploy
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -54,12 +35,16 @@ jobs:
           script: |
             cd /home/ubuntu/tinyurl-backend
 
+            # Pull latest code (nginx config, docker-compose, etc.)
             git fetch origin
             git checkout prod
             sudo git reset --hard origin/prod
 
+            # Stop running containers
             docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
-            docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+            # Remove stale local image so Docker is forced to pull fresh from Hub
+            docker rmi $(docker images -q ${{ secrets.DOCKER_USERNAME }}/tinyurl-backend) 2>/dev/null || true
 
-            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d
+            # Pull fresh image from Docker Hub and start containers
+            docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --pull always
