@@ -5,6 +5,7 @@ import morgan from "morgan";
 import aliasRouter from "./routes/aliasRoute";
 import analyticsRouter from "./routes/analyticsRoute";
 import authRouter from "./routes/authRoute";
+import shortCodeRouter from "./routes/shortCodeRoute";
 import authenticate from "./middlewares/authenticate";
 import { appendUserdId } from "./middlewares/appendUserId";
 import { attachUser } from "./middlewares/attachUser";
@@ -18,6 +19,7 @@ const createServer = () => {
 };
 
 const app = createServer();
+app.set("trust proxy", true);
 
 app.use(
   cors({
@@ -37,6 +39,9 @@ app.get("/health", (_req, res) => {
 app.use("/api/auth", apiRateLimiter, authRouter);
 app.use("/api/v1", apiRateLimiter, appendUserdId, aliasRouter);
 app.use("/api/v1/analytics", authenticate, analyticsRouter);
+
+// Public redirect route WITHOUT strict API limiter
+app.use("/", shortCodeRouter);
 
 app.use(errorHandler);
 
