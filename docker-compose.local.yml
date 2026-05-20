@@ -2,6 +2,7 @@ services:
   app:
     build: .
     container_name: tinyurl-app
+    command: ["sh", "-c", "npx prisma migrate deploy && npm run start"]
     ports:
       - "8080:8080"
     depends_on:
