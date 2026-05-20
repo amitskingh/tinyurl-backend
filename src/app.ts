@@ -35,7 +35,6 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", apiRateLimiter, authRouter);
-app.use("/api/v1/auth", apiRateLimiter, authRouter);
 app.use("/api/v1", apiRateLimiter, appendUserdId, aliasRouter);
 app.use("/api/v1/analytics", authenticate, analyticsRouter);
 
