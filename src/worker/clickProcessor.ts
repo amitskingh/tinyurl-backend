@@ -135,12 +135,14 @@ function mapOSType(os: string | undefined): OSType | null {
 }
 
 function mapDeviceType(device: string | undefined): DeviceType | null {
-  if (!device) return null;
   const deviceMap: Record<string, DeviceType> = {
     MOBILE: "MOBILE",
     TABLET: "TABLET",
     DESKTOP: "DESKTOP",
   };
+
+  if (!device) return deviceMap["DESKTOP"];
+  
   return deviceMap[device] || deviceMap["DESKTOP"];
 }
 
